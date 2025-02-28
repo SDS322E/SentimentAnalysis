@@ -11,80 +11,107 @@ glimpse(amazon)
 
 ## Sample some reviews
 amazon |>
-    select(starts_with("review")) |> 
+    select(starts_with("review")) |>
     sample_n(10)
 
 ## Keep a subset of variables
-dat <- amazon |> 
-    select(product_id, review_body) |> 
+dat <- amazon |>
+    select(product_id, review_body) |>
     arrange(product_id)
 dat
 
 ## Tokenize words and save object
-rev_words <- dat |> 
+rev_words <- dat |>
     unnest_tokens(word, review_body)
 rev_words
 
 ## Join words to remove stop words and add sentiment data
-rev_words |> 
-    anti_join(stop_words, by = "word") |> 
+rev_words |>
+    anti_join(stop_words, by = "word") |>
     inner_join(sentiments, by = "word")
-    
+
 ## Create a score indicating positive or negative sentiment
-rev_words |> 
-    anti_join(stop_words, by = "word") |> 
-    inner_join(sentiments, by = "word") |> 
+rev_words |>
+    anti_join(stop_words, by = "word") |>
+    inner_join(sentiments, by = "word") |>
     mutate(score = case_when(
         sentiment == "negative" ~ -1,
         sentiment == "positive" ~ 1
     ))
 
 ## Sum up the scores across all reviews of a product
-scores <- rev_words |> 
-    anti_join(stop_words, by = "word") |> 
-    inner_join(sentiments, by = "word") |> 
+scores <- rev_words |>
+    anti_join(stop_words, by = "word") |>
+    inner_join(sentiments, by = "word") |>
     mutate(score = case_when(
         sentiment == "negative" ~ -1,
         sentiment == "positive" ~ 1
-    )) |> 
-    group_by(product_id) |> 
+    )) |>
+    group_by(product_id) |>
     summarize(mean_score = mean(score),
-              num_words = n()) 
+              num_words = n())
 scores
 
 ## See top ranked scores
-scores |> 
-    arrange(desc(mean_score), desc(num_words)) 
+scores |>
+    arrange(desc(mean_score), desc(num_words))
+
+scores |>
+    arrange(desc(mean_score), desc(num_words)) |>
+    slice(1:10) |>
+    inner_join(amazon, by = "product_id") |>
+    select(starts_with("product"))
+
 
 ## See bottom ranked scores
-scores |> 
+scores |>
     arrange(mean_score, num_words)
 
+scores |>
+    arrange(mean_score, num_words) |>
+    slice(1:10) |>
+    inner_join(amazon, by = "product_id") |>
+    select(starts_with("product"))
 
-scores |> 
-    ggplot(aes(num_words, mean_score)) + 
+## Make a scatterplot of scores vs. number of words
+scores |>
+    ggplot(aes(num_words, mean_score)) +
     geom_point()
 
 
-scores |> 
-    select(product_id, mean_score) 
+## Look at scores and star ratings
+## Are scores and star ratings related?
+scores |>
+    select(product_id, mean_score)
 
-amazon |> 
+amazon |>
     select(product_id, star_rating)
 
-scores |> 
-    inner_join(amazon, by = "product_id") |> 
-    select(product_id, star_rating, mean_score) |> 
-    mutate(star_rating = factor(star_rating)) |> 
-    ggplot(aes(x = star_rating, y = mean_score)) + 
-    geom_boxplot()
-    
-scores |> 
-    inner_join(amazon, by = "product_id") |> 
+## Join scores with original data to get star ratings
+scores |>
+    inner_join(amazon, by = "product_id") |>
+    select(product_id, star_rating, mean_score)
+
+## Convert star rating to a factor/categorical data
+scores |>
+    inner_join(amazon, by = "product_id") |>
     select(product_id, star_rating, mean_score) |>
-    group_by(product_id) |> 
+    mutate(star_rating = factor(star_rating))
+
+## Make a boxplot
+scores |>
+    inner_join(amazon, by = "product_id") |>
+    select(product_id, star_rating, mean_score) |>
+    mutate(star_rating = factor(star_rating)) |>
+    ggplot(aes(x = star_rating, y = mean_score)) +
+    geom_boxplot()
+
+scores |>
+    inner_join(amazon, by = "product_id") |>
+    select(product_id, star_rating, mean_score) |>
+    group_by(product_id) |>
     summarize(mean_star = mean(star_rating),
-              mean_score = mean(mean_score)) |> 
+              mean_score = mean(mean_score)) |>
     ggplot(aes(x = mean_score, y = mean_star)) +
     geom_point() +
     geom_smooth(method = "lm", se = FALSE) +
@@ -94,21 +121,21 @@ scores |>
          title = "Relationship between Amazon review sentiment and star rating")
 
 
-scores |> 
+scores |>
     arrange(desc(num_words))
 
 
-scores |> 
-    ggplot(aes(x = num_words)) + 
+scores |>
+    ggplot(aes(x = num_words)) +
     geom_histogram(bins = 30) +
     labs(x = "Number of Review Words",
          y = "Number of Product IDs")
 
 
-amazon |> 
-    group_by(product_id) |> 
-    summarize(n = n()) |> 
-    ggplot(aes(x = n)) + 
+amazon |>
+    group_by(product_id) |>
+    summarize(n = n()) |>
+    ggplot(aes(x = n)) +
     geom_histogram(bins = 10) +
     scale_x_log10() +
     labs(x = "Number of Reviews (Log Scale)",
@@ -117,13 +144,13 @@ amazon |>
 
 
 ## Compute correlation between average star rating and sentiment score
-scores |> 
-    inner_join(amazon, by = "product_id") |> 
+scores |>
+    inner_join(amazon, by = "product_id") |>
     select(product_id, star_rating, mean_score) |>
-    group_by(product_id) |> 
+    group_by(product_id) |>
     summarize(mean_star = mean(star_rating),
-              mean_score = mean(mean_score)) |> 
-    filter(mean_score < 2000) |> 
+              mean_score = mean(mean_score)) |>
+    filter(mean_score < 2000) |>
     summarize(cor = cor(mean_star, mean_score))
 
 
